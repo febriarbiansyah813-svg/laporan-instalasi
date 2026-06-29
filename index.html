@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Foto → PDF Laporan Instalasi</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
     --navy-950:#0a1326;
@@ -199,6 +200,19 @@
   </div>
 
   <script>
+    // --- AMBIL VARIABEL DI VERCEL OTOMATIS (Mendukung Environment Vercel standar & Vite runtime) ---
+    const supabaseUrl = window.env?.VITE_SUPABASE_URL || import.meta?.env?.VITE_SUPABASE_URL || '';
+    const supabaseAnonKey = window.env?.VITE_SUPABASE_ANON_KEY || import.meta?.env?.VITE_SUPABASE_ANON_KEY || '';
+    
+    let supabaseClient = null;
+    
+    // Inisialisasi Supabase hanya jika kunci di Vercel sudah terisi
+    if (supabaseUrl && supabaseAnonKey) {
+       supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+    } else {
+       console.warn("Peringatan: Variabel VITE_SUPABASE_URL atau KEY belum terbaca. Pastikan Environment Variables di Vercel sudah benar.");
+    }
+
     let structuredGroups = [];
 
     function triggerUploadWithSubtitleCheck() {
@@ -353,20 +367,16 @@
       updateQuickSelectBadges();
     }
 
-    function generatePDF() {
+    // --- FUNGSI UTAMA GENERATE PDF DAN SIMPAN DATA KE DATABASE SUPABASE ---
+    async function generatePDF() {
       if (structuredGroups.length === 0) {
         alert("Silakan masukkan minimal 1 subjudul beserta fotonya terlebih dahulu!");
         return;
       }
 
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({
-        orientation: 'p',
-        unit: 'mm',
-        format: 'a4'
-      });
-
       const title = document.getElementById('pdfTitle').value.trim() || 'LAPORAN INSTALASI';
+      const address = document.getElementById('custAddress').value.trim() || 'Tidak Ada Alamat';
+      const techName = document.getElementById('techName').value.trim() || 'Tidak Ada Nama';
       const rawDate = document.getElementById('installDate').value;
       
       let formattedDate = 'Tanpa-Tanggal';
@@ -376,6 +386,37 @@
           formattedDate = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`; 
         }
       }
+
+      // --- AKSI 1: KIRIM DATA KE DATABASE SUPABASE ---
+      if (supabaseClient) {
+        try {
+          const { error } = await supabaseClient
+            .from('laporan_instalasi')
+            .insert([
+              { 
+                nama_teknisi: techName, 
+                lokasi: address, 
+                keterangan: title
+              }
+            ]);
+
+          if (error) {
+            console.error("Gagal simpan ke Supabase:", error.message);
+          } else {
+            console.log("Sukses menyimpan data laporan ke database Supabase!");
+          }
+        } catch (dbErr) {
+          console.error("Koneksi DB Bermasalah:", dbErr);
+        }
+      }
+
+      // --- AKSI 2: PROSES PENYUSUNAN & DOWNLOAD PDF ---
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: 'a4'
+      });
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(16);
@@ -414,7 +455,6 @@
         doc.setFontSize(12);
         doc.setTextColor(47, 111, 237); 
         
-        // Perubahan Simbol % atau Kotak Menjadi Tanda Hubung Strip (-)
         const cleanSubtitleText = `- ${group.subtitle}`;
         doc.text(cleanSubtitleText, 14, currentY);
         currentY += 8; 
