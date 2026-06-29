@@ -200,17 +200,19 @@
   </div>
 
   <script>
-    // --- AMBIL VARIABEL DI VERCEL OTOMATIS (Mendukung Environment Vercel standar & Vite runtime) ---
+    // --- KONFIGURASI DAN AMBIL VARIABEL SUPABASE ---
     const supabaseUrl = window.env?.VITE_SUPABASE_URL || import.meta?.env?.VITE_SUPABASE_URL || '';
     const supabaseAnonKey = window.env?.VITE_SUPABASE_ANON_KEY || import.meta?.env?.VITE_SUPABASE_ANON_KEY || '';
     
     let supabaseClient = null;
     
-    // Inisialisasi Supabase hanya jika kunci di Vercel sudah terisi
-    if (supabaseUrl && supabaseAnonKey) {
-       supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
-    } else {
-       console.warn("Peringatan: Variabel VITE_SUPABASE_URL atau KEY belum terbaca. Pastikan Environment Variables di Vercel sudah benar.");
+    // Dibungkus aman (try-catch) supaya jika pustaka/kunci belum siap, tombol pilih foto TETAP AKTIF bekerja
+    try {
+      if (typeof supabase !== 'undefined' && supabaseUrl && supabaseAnonKey) {
+         supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+      }
+    } catch (err) {
+      console.warn("Supabase gagal dimuat sementara, namun web tetap berjalan:", err);
     }
 
     let structuredGroups = [];
@@ -367,7 +369,7 @@
       updateQuickSelectBadges();
     }
 
-    // --- FUNGSI UTAMA GENERATE PDF DAN SIMPAN DATA KE DATABASE SUPABASE ---
+    // --- FUNGSI UTAMA GENERATE PDF DAN DATABASE ---
     async function generatePDF() {
       if (structuredGroups.length === 0) {
         alert("Silakan masukkan minimal 1 subjudul beserta fotonya terlebih dahulu!");
@@ -387,7 +389,7 @@
         }
       }
 
-      // --- AKSI 1: KIRIM DATA KE DATABASE SUPABASE ---
+      // --- PROSES 1: KIRIM KE SUPABASE DATABASE ---
       if (supabaseClient) {
         try {
           const { error } = await supabaseClient
@@ -403,14 +405,14 @@
           if (error) {
             console.error("Gagal simpan ke Supabase:", error.message);
           } else {
-            console.log("Sukses menyimpan data laporan ke database Supabase!");
+            console.log("Sukses menyimpan data ke Supabase!");
           }
         } catch (dbErr) {
           console.error("Koneksi DB Bermasalah:", dbErr);
         }
       }
 
-      // --- AKSI 2: PROSES PENYUSUNAN & DOWNLOAD PDF ---
+      // --- PROSES 2: CETAK FILE PDF ---
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF({
         orientation: 'p',
